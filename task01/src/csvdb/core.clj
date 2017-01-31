@@ -96,24 +96,21 @@
 ;;
 ;; Hint: reduce, conj, merge, first, filter, get
 ;; Here column1 belongs to data1, column2 belongs to data2.
-
 (defn join* [data1 column1 data2 column2]
   ;; 1. Start collecting results from empty collection.
   ;; 2. Go through each element of data1.
   ;; 3. For each element of data1 (lets call it element1) find all elements of data2 (lets call each as element2) where column1 = column2.
   ;; 4. Use function 'merge' and merge element1 with each element2.
   ;; 5. Collect merged elements.
+  (map first
+       (reduce
+        (fn [acc rec1]
+          (conj acc
+                (map #(merge % rec1)
+                     (filter #(= (get rec1 column1) (get % column2)) data2))))
+        [] data1)))
 
-  (into []
-        (map first 
-             (map (fn [rec1]
-                    (map (fn [mrg] (merge mrg rec1))
-                         (filter (fn [rec2]
-                                   (= (get rec1 column1) (get rec2 column2)))
-                                 data2)))
-                  data1))))
-
-                                        ; (perform-joins student-subject [[:student_id student :id] [:subject_id subject :id]])
+;; (perform-joins student-subject [[:student_id student :id] [:subject_id subject :id]])
 ;; => [{:subject "Math", :subject_id 1, :surname "Ivanov", :year 1998, :student_id 1, :id 1} {:subject "Math", :subject_id 1, :surname "Petrov", :year 1997, :student_id 2, :id 2} {:subject "CS", :subject_id 2, :surname "Petrov", :year 1997, :student_id 2, :id 2} {:subject "CS", :subject_id 2, :surname "Sidorov", :year 1996, :student_id 3, :id 3}]
 ;;
 ;; Hint: loop-recur, let, first, next, join*
