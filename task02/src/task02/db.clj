@@ -21,9 +21,9 @@
   (update-in rec [field] parse-int))
 
 ;; Место для хранения данных - используйте atom/ref/agent/...
-(def student :implement-me)
-(def subject :implement-me)
-(def student-subject :implement-me)
+(def student (agent ()))
+(def subject (agent ()))
+(def student-subject (agent ()))
 
 ;; функция должна вернуть мутабельный объект используя его имя
 (defn get-table [^String tb-name]
@@ -38,14 +38,18 @@
 ;;; и сохраняет их в изменяемых переменных student, subject, student-subject
 (defn load-initial-data []
   ;;; :implement-me может быть необходимо добавить что-то еще
-  (:implement-me student (->> (data-table (csv/read-csv (slurp "student.csv")))
-                     (map #(str-field-to-int :id %))
-                     (map #(str-field-to-int :year %))))
-  (:implement-me subject (->> (data-table (csv/read-csv (slurp "subject.csv")))
-                     (map #(str-field-to-int :id %))))
-  (:implement-me student-subject (->> (data-table (csv/read-csv (slurp "student_subject.csv")))
-                             (map #(str-field-to-int :subject_id %))
-                             (map #(str-field-to-int :student_id %)))))
+  (send student empty)
+  (send student into (->> (data-table (csv/read-csv (slurp "student.csv")))
+                          (map #(str-field-to-int :id %))
+                          (map #(str-field-to-int :year %))))
+  (send subject empty)
+  (send subject into (->> (data-table (csv/read-csv (slurp "subject.csv")))
+                          (map #(str-field-to-int :id %))))
+  (send student-subject empty)
+  (send student-subject into (->> (data-table (csv/read-csv (slurp "student_subject.csv")))
+                                  (map #(str-field-to-int :subject_id %))
+                                  (map #(str-field-to-int :student_id %)))))
+;;(load-initial-data)
 
 ;; select-related functions...
 (defn where* [data condition-func]
@@ -82,11 +86,19 @@
 ;;   (select student-subject :joins [[:student_id "student" :id] [:subject_id "subject" :id]])
 ;;   (select student-subject :limit 2 :joins [[:student_id "student" :id] [:subject_id "subject" :id]])
 (defn select [data & {:keys [where limit order-by joins]}]
-  (-> @data
-      (perform-joins joins)
-      (where* where)
-      (order-by* order-by)
-      (limit* limit)))
+  (as-> @data dt
+    (if-not (nil? joins)
+      (perform-joins dt joins)
+      dt)
+    (if-not (nil? where)
+      (where* dt where)
+      dt)
+    (if-not (nil? order-by)
+      (order-by* dt order-by)
+      dt)
+    (if-not (nil? limit)
+      (limit* dt limit)
+      dt)))
 
 ;; insert/update/delete...
 
@@ -99,8 +111,9 @@
 ;;   (delete student) -> []
 ;;   (delete student :where #(= (:id %) 1)) -> все кроме первой записи
 (defn delete [data & {:keys [where]}]
-  :implement-me
-  )
+  (if-not (nil? where)
+    (send data #(remove where %))
+    (send data empty)))
 
 ;; Данная функция должна обновить данные в строках соответствующих указанному предикату
 ;; (или во всей таблице).
@@ -112,9 +125,9 @@
 ;;   (update student {:id 5})
 ;;   (update student {:id 6} :where #(= (:year %) 1996))
 (defn update [data upd-map & {:keys [where]}]
-  :implement-me
-  )
-
+  (if-not (nil? where)
+    (send student #(map (fn[x] (if (where x) (into x upd-map) x)) %))
+    (send student #(map (fn[x] (into x upd-map)) %))))
 
 ;; Вставляет новую строку в указанную таблицу
 ;;
@@ -124,6 +137,7 @@
 ;; Примеры использования:
 ;;   (insert student {:id 10 :year 2000 :surname "test"})
 (defn insert [data new-entry]
-  :implement-me
-  )
+  (send data #(conj % new-entry)))
 
+
+(if (#(= (:year %) 1996) {:year 1996}) 1 2 ) 

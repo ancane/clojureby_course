@@ -1,4 +1,5 @@
 (ns task02.query
+  (:require [clojure.core.match :refer [match]])
   (:use [task02 helpers db]))
 
 ;; Функция выполняющая парсинг запроса переданного пользователем
@@ -34,10 +35,62 @@
 ;; ("student" :where #<function> :order-by :id :limit 2 :joins [[:id "subject" :sid]])
 ;; > (parse-select "werfwefw")
 ;; nil
-(defn parse-select [^String sel-string]
-  :implement-me)
 
-(defn make-where-function [& args] :implement-me)
+(defn make-where-function [& args]
+  (match (vec args)
+         [col "=" vl]  #(= ((keyword col) %) vl)
+         [col "!=" vl] #(not (= ((keyword col) %) vl))
+         [col "<=" vl] #(<= ((keyword col) %) vl)
+         [col ">=" vl] #(>= ((keyword col) %) vl)
+         [col "<" vl]  #(< ((keyword col) %) vl)
+         [col ">" vl]  #(> ((keyword col) %) vl)
+         :else nil))
+
+
+(defn- parse-joins [parsed unparsed]
+  (loop [result parsed
+         req unparsed]
+    (match req
+           [(_ :guard #(.equalsIgnoreCase "join" %))
+            other_table
+            (_ :guard #(.equalsIgnoreCase "on" %))
+            left_column "=" right_column
+            & rst
+            ] (recur (conj result
+                           :joins
+                           [[(keyword left_column)
+                             other_table
+                             (keyword right_column)]]) rst)
+           :else (reverse result)
+           )))
+
+(defn parse-select [^String sel-string]
+  (loop [result ()
+         req (vec (.split sel-string " "))]
+    (match req
+           [(_ :guard #(.equalsIgnoreCase "select" %))
+            tbl & rst] (recur (conj result tbl) rst)
+           [(_ :guard #(.equalsIgnoreCase "where" %))
+            column
+            (opr :guard #(contains? #{"=" "!=" "<" ">" "<=" ">="} %))
+            (vl :guard #(valid-value? %))
+            & rst] (recur (conj
+                           result
+                           :where
+                           (make-where-function (keyword column)
+                                                opr
+                                                (to-valid-value vl)))
+                          rst)
+           [(_ :guard #(.equalsIgnoreCase "order" %))
+            (_ :guard #(.equalsIgnoreCase "by" %))
+            column & rst
+            ] (recur (conj result :order-by (keyword column)) rst)
+           [(_ :guard #(.equalsIgnoreCase "limit" %))
+            (n :guard #(is-valid-int? %))
+            & rst
+            ] (recur (conj result :limit (parse-int n)) rst)
+           :else (parse-joins result req)
+           )))
 
 ;; Выполняет запрос переданный в строке.  Бросает исключение если не удалось распарсить запрос
 
